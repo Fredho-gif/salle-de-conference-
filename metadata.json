@@ -1,0 +1,10 @@
+{
+  "name": "ConfeRoom - Visioconférence Haute Capacité",
+  "description": "Plateforme de visioconférence WebRTC temps réel avec contrôle atomique de capacité, chat et partage d'écran.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "display-capture"
+  ],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

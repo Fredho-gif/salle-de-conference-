@@ -1,0 +1,96 @@
+version: '3.8'
+
+services:
+  # Base de données Relationnelle (Utilisateurs, Salles, Historique)
+  postgres:
+    image: postgres:16-alpine
+    container_name: conferoom-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: conferoom_user
+      POSTGRES_PASSWORD: conferoom_password
+      POSTGRES_DB: conferoom_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U conferoom_user -d conferoom_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Cache en mémoire & Verrous Atomiques de Capacité
+  redis:
+    image: redis:7-alpine
+    container_name: conferoom-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Serveur Média SFU WebRTC (LiveKit)
+  livekit:
+    image: livekit/livekit-server:latest
+    container_name: conferoom-livekit
+    restart: unless-stopped
+    command: --dev
+    ports:
+      - "7880:7880"         # Signaling HTTP/WS
+      - "7881:7881"         # RTC TCP fallback
+      - "7882:7882/udp"     # RTC UDP Media
+    environment:
+      - LIVEKIT_KEYS=devkey:secret_livekit_key_2026
+
+  # Backend NestJS (API REST + Signaling Socket.io + Contrôle Capacité Redis)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: conferoom-backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      livekit:
+        condition: service_started
+    environment:
+      PORT: 3001
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USERNAME: conferoom_user
+      DB_PASSWORD: conferoom_password
+      DB_NAME: conferoom_db
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      JWT_SECRET: super_secret_jwt_key_conferoom_2026
+      LIVEKIT_API_KEY: devkey
+      LIVEKIT_API_SECRET: secret_livekit_key_2026
+      LIVEKIT_URL: ws://livekit:7880
+    ports:
+      - "3001:3001"
+
+  # Frontend Web (React 18 + Vite + Tailwind CSS)
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: conferoom-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "3000:80"
+
+volumes:
+  postgres_data:
+  redis_data:
